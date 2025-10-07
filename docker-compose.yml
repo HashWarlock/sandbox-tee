@@ -7,15 +7,15 @@ services:
       - "8079:8079"
       - "8000:8000"
       - "8080:8080"
+      - "8089:8089"
       - "8091:8091"
     environment:
       # Authentication configuration
       - AUTH_USERNAME=${AUTH_USERNAME:-admin}
       - AUTH_PASSWORD=${AUTH_PASSWORD:-admin123}
-      # Git repository configuration
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
-      - GITHUB_USER=${GITHUB_USER}
+      # Git repository configuration (format: owner/repo-name)
       - GITHUB_REPO=${GITHUB_REPO}
+      - GH_TOKEN=${GH_TOKEN}
       # Standard environment variables for the service
       - USER=gem  # Force to gem, not root
       - USER_UID=${USER_UID:-1000}
@@ -85,6 +85,41 @@ services:
           echo "Warning: Cannot modify sudoers (running in restricted environment)"
         fi
 
+        # Install Docker if not already installed
+        if ! command -v docker >/dev/null 2>&1; then
+          echo "Installing Docker..."
+          apt-get update
+          apt-get install -y ca-certificates curl
+          install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          chmod a+r /etc/apt/keyrings/docker.asc
+
+          # Add the repository to Apt sources
+          echo \
+            "deb [arch=$$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+            $$( . /etc/os-release && echo "$${UBUNTU_CODENAME:-$$VERSION_CODENAME}") stable" | \
+            tee /etc/apt/sources.list.d/docker.list > /dev/null
+          apt-get update
+
+          # Install Docker packages
+          apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+          # Start Docker service
+          systemctl start docker 2>/dev/null || true
+          systemctl enable docker 2>/dev/null || true
+
+          # Add user to docker group
+          usermod -aG docker $$USER 2>/dev/null || true
+
+          echo "Docker installed successfully"
+        else
+          echo "Docker is already installed"
+          # Ensure Docker service is running
+          systemctl start docker 2>/dev/null || true
+          # Ensure user is in docker group
+          usermod -aG docker $$USER 2>/dev/null || true
+        fi
+
         # Install Flox
         FLOX_VERSION="1.7.4"
         FLOX_DEB="/tmp/flox-$${FLOX_VERSION}.x86_64-linux.deb"
@@ -110,12 +145,18 @@ services:
         # bashrc - only move if source exists and destination doesn't
         [ -f /opt/gem/bashrc ] && [ ! -f /home/$$USER/.bashrc ] && mv /opt/gem/bashrc /home/$$USER/.bashrc
 
-        # Add Flox activation to bashrc
+        # Add Flox activation and GH_TOKEN to bashrc
         if [ -f /home/$$USER/.bashrc ]; then
           if ! grep -q "flox activate" /home/$$USER/.bashrc; then
             echo "" >> /home/$$USER/.bashrc
             echo "# Activate Flox environment" >> /home/$$USER/.bashrc
             echo 'eval "$$(flox activate -d /home/$$USER/.flox-env)"' >> /home/$$USER/.bashrc
+          fi
+          # Add GH_TOKEN if provided
+          if [ -n "$${GH_TOKEN}" ]; then
+            if ! grep -q "export GH_TOKEN" /home/$$USER/.bashrc; then
+              echo "export GH_TOKEN=\"$${GH_TOKEN}\"" >> /home/$$USER/.bashrc
+            fi
           fi
         fi
 
@@ -139,20 +180,36 @@ services:
           rm -rf /opt/gem/nginx/nginx.python_srv.conf
         fi
 
-        # Clone GitHub repository if environment variables are set
-        if [ -n "$${GITHUB_USER}" ] && [ -n "$${GITHUB_REPO}" ] && [ -n "$${GITHUB_TOKEN}" ]; then
-          echo "Setting up GitHub repository..."
-          echo "Cloning repository: $$GITHUB_USER/$$GITHUB_REPO"
-          cd /home/$$USER
-          if [ -d "$$GITHUB_REPO" ]; then
-            echo "Repository already exists, pulling latest..."
-            cd $$GITHUB_REPO && git pull https://$$GITHUB_USER:$$GITHUB_TOKEN@github.com/$$GITHUB_USER/$$GITHUB_REPO.git || echo "Pull failed, continuing..."
-          else
-            git clone https://$$GITHUB_USER:$$GITHUB_TOKEN@github.com/$$GITHUB_USER/$$GITHUB_REPO.git || echo "Clone failed, continuing..."
+        # Set up GitHub authentication and clone repository if configured
+        if [ -n "$${GITHUB_REPO}" ]; then
+          echo "Setting up GitHub repository: $$GITHUB_REPO"
+
+          # Authenticate with GitHub CLI if token is provided
+          if [ -n "$${GH_TOKEN}" ]; then
+            echo "Authenticating with GitHub..."
+            # Set up git credentials for token-based authentication
+            su - $$USER -c "git config --global credential.helper store"
+            su - $$USER -c "echo \"https://\$${GH_TOKEN}@github.com\" > ~/.git-credentials"
+            # Also configure gh CLI (skip validation if read:org scope is missing)
+            su - $$USER -c "echo \"$${GH_TOKEN}\" | GH_TOKEN=\"$${GH_TOKEN}\" gh auth login --with-token --skip-ssh-key 2>/dev/null || true"
+            echo "GitHub authentication configured"
           fi
-          echo "Git clone completed"
+
+          # Extract repo name from owner/repo format
+          REPO_NAME=$$(echo "$$GITHUB_REPO" | cut -d'/' -f2)
+
+          cd /home/$$USER
+          if [ -d "$$REPO_NAME" ]; then
+            echo "Repository already exists, pulling latest..."
+            su - $$USER -c "cd $$REPO_NAME && git pull" || echo "Pull failed, continuing..."
+          else
+            echo "Cloning repository..."
+            su - $$USER -c "git clone https://github.com/$$GITHUB_REPO.git" || echo "Clone failed, continuing..."
+          fi
+
           # Ensure ownership of cloned repo
-          chown -R $$USER:$$USER /home/$$USER/$$GITHUB_REPO 2>/dev/null || true
+          [ -d "$$REPO_NAME" ] && chown -R $$USER:$$USER /home/$$USER/$$REPO_NAME 2>/dev/null || true
+          echo "GitHub repository setup completed"
         fi
 
         # in the end ensure the home directory is owned by the user

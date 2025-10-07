@@ -17,7 +17,35 @@
 
 ## 🚀 Quick Start
 
-Get up and running in 30 seconds:
+### TEE Setup with Flox & GitHub CLI
+
+This fork adds Flox package manager and GitHub CLI integration for TEE environments:
+
+```bash
+# 1. Clone this repository
+git clone https://github.com/HashWarlock/sandbox-tee.git
+cd sandbox-tee
+
+# 2. Configure environment (copy and edit .env)
+cp .env.example .env
+
+# 3. Set up GitHub integration (optional)
+# Edit .env and add:
+#   GITHUB_REPO=owner/repo-name  # e.g., HashWarlock/erc-8004-ex-phala
+#   GH_TOKEN=ghp_your_token_here
+# Get your token at: https://github.com/settings/tokens/new?scopes=repo&description=AIO%20Sandbox
+
+# 4. Start the sandbox
+docker compose up -d
+```
+
+Once running, access the environment at:
+- 📖 **Documentation**: http://localhost:8080/v1/docs
+- 🌐 **VNC Browser**: http://localhost:8080/vnc/index.html?autoconnect=true
+- 💻 **VSCode Server**: http://localhost:8080/code-server/
+- 🤖 **MCP Services**: http://localhost:8080/mcp
+
+### Standard Quick Start
 
 ```bash
 # Start the sandbox (International)
@@ -26,12 +54,6 @@ docker run --rm -it -p 8080:8080 ghcr.io/agent-infra/sandbox:latest
 # For users in mainland China
 docker run --rm -it -p 8080:8080 enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
 ```
-
-Once running, access the environment at:
-- 📖 **Documentation**: http://localhost:8080/v1/docs
-- 🌐 **VNC Browser**: http://localhost:8080/vnc/index.html?autoconnect=true
-- 💻 **VSCode Server**: http://localhost:8080/code-server/
-- 🤖 **MCP Services**: http://localhost:8080/mcp
 
 ## 🎯 What is AIO Sandbox?
 
@@ -50,6 +72,16 @@ Traditional sandboxes are **single-purpose** (browser, code, or shell), making f
 - ✅ **Secure Execution** - Sandboxed Python and Node.js execution with safety guarantees
 - ✅ **Zero Configuration** - Pre-configured MCP servers and development tools ready to use
 - ✅ **Agent-Ready** - MCP-compatible APIs for seamless AI agent integration
+
+### TEE Fork Enhancements
+
+This fork adds specific features for Trusted Execution Environments:
+
+- 📦 **Flox Package Manager** - Declarative, reproducible development environments with 24+ pre-installed tools
+- 🔐 **GitHub CLI Integration** - Seamless authentication and repository management with `gh`
+- 🐳 **Docker Socket Access** - Build and run containers from within the sandbox
+- 🚀 **24+ Developer Tools** - Python 3.13.7, Node.js 22.19.0, git, ripgrep, jq, and more
+- 🔧 **Auto-activation** - Flox environment automatically activated on login
 
 ## 📦 Installation
 
