@@ -13,6 +13,8 @@ services:
       # Authentication configuration
       - AUTH_USERNAME=${AUTH_USERNAME:-admin}
       - AUTH_PASSWORD=${AUTH_PASSWORD:-admin123}
+      # Phala Cloud API Key
+      - PHALA_API_KEY=${PHALA_API_KEY}
       # Git repository configuration (format: owner/repo-name)
       - GITHUB_REPO=${GITHUB_REPO}
       - GH_TOKEN=${GH_TOKEN}
@@ -110,7 +112,7 @@ services:
         # bashrc - only move if source exists and destination doesn't
         [ -f /opt/gem/bashrc ] && [ ! -f /home/$$USER/.bashrc ] && mv /opt/gem/bashrc /home/$$USER/.bashrc
 
-        # Add Flox activation and GH_TOKEN to bashrc
+        # Add Flox activation and environment variables to bashrc
         if [ -f /home/$$USER/.bashrc ]; then
           if ! grep -q "flox activate" /home/$$USER/.bashrc; then
             echo "" >> /home/$$USER/.bashrc
@@ -121,6 +123,12 @@ services:
           if [ -n "$${GH_TOKEN}" ]; then
             if ! grep -q "export GH_TOKEN" /home/$$USER/.bashrc; then
               echo "export GH_TOKEN=\"$${GH_TOKEN}\"" >> /home/$$USER/.bashrc
+            fi
+          fi
+          # Add PHALA_API_KEY if provided
+          if [ -n "$${PHALA_API_KEY}" ]; then
+            if ! grep -q "export PHALA_API_KEY" /home/$$USER/.bashrc; then
+              echo "export PHALA_API_KEY=\"$${PHALA_API_KEY}\"" >> /home/$$USER/.bashrc
             fi
           fi
         fi
